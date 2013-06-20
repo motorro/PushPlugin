@@ -158,7 +158,7 @@ public class GCMIntentService extends GCMBaseIntentService {
 	private Uri getRingtoneUri(Context context, Bundle extras) {
 		Uri result = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
 		
-		String soundName = extras.getString("sound");
+		String soundName = extras.getString("soundname");
 		if (null == soundName || soundName.equals("")) {
 			return result;
 		}
