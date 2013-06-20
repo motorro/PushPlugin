@@ -9,11 +9,14 @@ import org.json.JSONObject;
 import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningTaskInfo;
+import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
-import android.media.Ringtone;
+import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -93,40 +96,89 @@ public class GCMIntentService extends GCMBaseIntentService {
 
 		NotificationCompat.Builder mBuilder = 
 			new NotificationCompat.Builder(context)
-				.setSmallIcon(context.getApplicationInfo().icon)
+				.setPriority(0)
+				.setDefaults(Notification.DEFAULT_LIGHTS | Notification.DEFAULT_VIBRATE)
 				.setWhen(System.currentTimeMillis())
 				.setContentTitle(appName)
-				.setTicker(appName)
 				.setContentIntent(contentIntent);
+		
+		String ticker = extras.getString("ticker");
+		if (null == ticker || ticker.equals("")) {
+			ticker = appName;
+		} 
+		mBuilder.setTicker(ticker);
 
 		String message = extras.getString("message");
-		if (message != null) {
-			mBuilder.setContentText(message);
-		} else {
-			mBuilder.setContentText("<missing message content>");
-		}
+		if (null == message || message.equals("")) {
+			message = "<missing message content>";
+		} 
+		mBuilder.setContentText(message);
 
 		String msgcnt = extras.getString("msgcnt");
-		if (msgcnt != null) {
+		if (null != msgcnt) {
 			mBuilder.setNumber(Integer.parseInt(msgcnt));
 		}
 
+		setIcons(mBuilder, context, extras);
+		//		mBuilder.setSmallIcon(getSmallIcon(context, extras));
+		mBuilder.setSound(getRingtoneUri(context, extras));
+		
 		mNotificationManager.notify((String) appName, NOTIFICATION_ID, mBuilder.build());
-		tryPlayRingtone();
-	}
-
-	private void tryPlayRingtone() 
-	{
-		try {
-			Uri notification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-			Ringtone r = RingtoneManager.getRingtone(getApplicationContext(), notification);
-			r.play();
-		} 
-		catch (Exception e) {
-			Log.e(TAG, "failed to play notification ringtone");
-		}
 	}
 	
+	/**
+	 * Gets sound passed in message or default ringtone
+	 * @param context
+	 * @param extras
+	 * @return
+	 */
+	private Uri getRingtoneUri(Context context, Bundle extras) {
+		Uri result = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+		
+		String soundName = extras.getString("sound");
+		if (null == soundName || soundName.equals("")) {
+			return result;
+		}
+
+		Resources res = context.getResources();
+		int soundId = res.getIdentifier(soundName, "raw", context.getPackageName());
+		if (0 == soundId) {
+			return result;
+		}
+		
+		result = Uri.parse("android.resource://" + context.getPackageName() + "/" + soundId);
+		return result;
+	}
+
+	/**
+	 * Sets custom icons if passed in message
+	 * @param builder
+	 * @param context
+	 * @param extras
+	 * @return
+	 */
+	private NotificationCompat.Builder setIcons(NotificationCompat.Builder builder, Context context, Bundle extras) {
+		Resources res = context.getResources();
+		int smallIcon = context.getApplicationInfo().icon;
+		Bitmap largeIcon = (((BitmapDrawable)res.getDrawable(smallIcon)).getBitmap());
+		
+		String iconName = extras.getString("icon");
+		if (null != iconName && false == iconName.equals("")) {
+			int smallIconId = res.getIdentifier(iconName, "drawable", context.getPackageName());
+			int largeIconId = res.getIdentifier(iconName + "_large", "drawable", context.getPackageName());
+			
+			if (0 != smallIconId) {
+				smallIcon = smallIconId;
+			}
+			
+			if (0 != largeIconId) {
+				largeIcon = (((BitmapDrawable)res.getDrawable(largeIconId)).getBitmap());
+			}
+		}
+		
+		return builder.setSmallIcon(smallIcon).setLargeIcon(largeIcon);
+	}
+
 	public static void cancelNotification(Context context)
 	{
 		NotificationManager mNotificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
