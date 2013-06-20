@@ -9,6 +9,11 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
@@ -63,20 +68,18 @@ public class GCMIntentService extends GCMBaseIntentService {
 		Bundle extras = intent.getExtras();
 		if (extras != null)
 		{
-			// if we are in the foreground, just surface the payload, else post it to the statusbar
-            if (PushPlugin.isInForeground()) {
-				extras.putBoolean("foreground", true);
-                PushPlugin.sendExtras(extras);
-			}
-			else {
-				extras.putBoolean("foreground", false);
+			boolean	foreground = PushPlugin.isInForeground();
 
-                // Send a notification if there is a message
-                if (extras.getString("message") != null && extras.getString("message").length() != 0) {
-                    createNotification(context, extras);
-                }
-            }
-        }
+			extras.putBoolean("foreground", foreground);
+
+			if (foreground)
+				// if we are in the foreground, just surface the payload, else post it to the statusbar
+				PushPlugin.sendExtras(extras);
+			else if (null != extras.getString("message") && 0 != extras.getString("message").length()) {
+				// Send a notification if there is a message
+				createNotification(context, extras);
+			}
+		}
 	}
 
 	public void createNotification(Context context, Bundle extras)
@@ -88,11 +91,11 @@ public class GCMIntentService extends GCMBaseIntentService {
 		notificationIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
 		notificationIntent.putExtra("pushBundle", extras);
 
-		PendingIntent contentIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);
-		
+		PendingIntent contentIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);		
+
 		int defaults = Notification.DEFAULT_ALL;
 
-		if (extras.getString("defaults") != null) {
+		if (null != extras.getString("defaults")) {
 			try {
 				defaults = Integer.parseInt(extras.getString("defaults"));
 			} catch (NumberFormatException e) {}
@@ -101,24 +104,35 @@ public class GCMIntentService extends GCMBaseIntentService {
 		NotificationCompat.Builder mBuilder =
 			new NotificationCompat.Builder(context)
 				.setDefaults(defaults)
-				.setSmallIcon(context.getApplicationInfo().icon)
 				.setWhen(System.currentTimeMillis())
-				.setContentTitle(extras.getString("title"))
-				.setTicker(extras.getString("title"))
 				.setContentIntent(contentIntent)
 				.setAutoCancel(true);
+		
+		String title = extras.getString("title");
+		if (null == title || title.equals("")) {
+			title = appName;
+		} 
+		mBuilder.setContentTitle(title);
+
+		String ticker = extras.getString("ticker");
+		if (null == ticker || ticker.equals("")) {
+			ticker = title;
+		} 
+		mBuilder.setTicker(ticker);
 
 		String message = extras.getString("message");
-		if (message != null) {
-			mBuilder.setContentText(message);
-		} else {
-			mBuilder.setContentText("<missing message content>");
-		}
+		if (null == message || message.equals("")) {
+			message = "<missing message content>";
+		} 
+		mBuilder.setContentText(message);
 
 		String msgcnt = extras.getString("msgcnt");
-		if (msgcnt != null) {
+		if (null != msgcnt) {
 			mBuilder.setNumber(Integer.parseInt(msgcnt));
 		}
+
+		setIcons(mBuilder, context, extras);
+		mBuilder.setSound(getRingtoneUri(context, extras));
 		
 		int notId = 0;
 		
@@ -133,6 +147,59 @@ public class GCMIntentService extends GCMBaseIntentService {
 		}
 		
 		mNotificationManager.notify((String) appName, notId, mBuilder.build());
+	}
+	
+	/**
+	 * Gets sound passed in message or default ringtone
+	 * @param context
+	 * @param extras
+	 * @return
+	 */
+	private Uri getRingtoneUri(Context context, Bundle extras) {
+		Uri result = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+		
+		String soundName = extras.getString("sound");
+		if (null == soundName || soundName.equals("")) {
+			return result;
+		}
+
+		Resources res = context.getResources();
+		int soundId = res.getIdentifier(soundName, "raw", context.getPackageName());
+		if (0 == soundId) {
+			return result;
+		}
+		
+		result = Uri.parse("android.resource://" + context.getPackageName() + "/" + soundId);
+		return result;
+	}
+
+	/**
+	 * Sets custom icons if passed in message
+	 * @param builder
+	 * @param context
+	 * @param extras
+	 * @return
+	 */
+	private NotificationCompat.Builder setIcons(NotificationCompat.Builder builder, Context context, Bundle extras) {
+		Resources res = context.getResources();
+		int smallIcon = context.getApplicationInfo().icon;
+		Bitmap largeIcon = (((BitmapDrawable)res.getDrawable(smallIcon)).getBitmap());
+		
+		String iconName = extras.getString("icon");
+		if (null != iconName && false == iconName.equals("")) {
+			int smallIconId = res.getIdentifier(iconName, "drawable", context.getPackageName());
+			int largeIconId = res.getIdentifier(iconName + "_large", "drawable", context.getPackageName());
+			
+			if (0 != smallIconId) {
+				smallIcon = smallIconId;
+			}
+			
+			if (0 != largeIconId) {
+				largeIcon = (((BitmapDrawable)res.getDrawable(largeIconId)).getBitmap());
+			}
+		}
+		
+		return builder.setSmallIcon(smallIcon).setLargeIcon(largeIcon);
 	}
 	
 	private static String getAppName(Context context)
