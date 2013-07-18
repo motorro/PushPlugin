@@ -132,7 +132,7 @@ public class GCMIntentService extends GCMBaseIntentService {
 		}
 
 		setIcons(mBuilder, context, extras);
-		mBuilder.setSound(getRingtoneUri(context, extras));
+		setFeedback(mBuilder, context, extras);
 		
 		int notId = 0;
 		
@@ -150,29 +150,49 @@ public class GCMIntentService extends GCMBaseIntentService {
 	}
 	
 	/**
-	 * Gets sound passed in message or default ringtone
+	 * Sets notification feedback according
+	 * 'sound' or 'soundname' parameters define a local sound resource 
+	 * 'default' as a value of 'sound' or 'soundname' makes default notification sound
+	 * If either of parameters are not found - notification is silent (icon only)
+	 * @param builder
 	 * @param context
 	 * @param extras
 	 * @return
 	 */
-	private Uri getRingtoneUri(Context context, Bundle extras) {
-		Uri result = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-		
-		String soundName = extras.getString("soundname");
-		if (null == soundName || soundName.equals("")) {
-			return result;
+	private NotificationCompat.Builder setFeedback(NotificationCompat.Builder builder, Context context, Bundle extras) {
+		// Check both sound properties
+		// If sound is not set - do not vibrate and flash also
+		String soundName = extras.getString("sound");
+		if (null == soundName) {
+			soundName = extras.getString("soundname");
 		}
-
+		if (null == soundName || soundName.equals("")) {
+			// No sound - no other feedback type
+			return builder;
+		}
+		
+		// Set default vibrate and flash patterns as soon as we have a non-null value for sound
+		// If "default" passed as a sound name - set default sound properties
+		if (soundName.equals("default")) {
+			builder.setDefaults(Notification.DEFAULT_ALL);
+			return builder;
+		} else {
+			builder.setDefaults(Notification.DEFAULT_LIGHTS | Notification.DEFAULT_VIBRATE);
+		}
+		
+		// Get the sound resource
+		
+		// USe default sound as a fallback
+		Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+		
 		Resources res = context.getResources();
 		int soundId = res.getIdentifier(soundName, "raw", context.getPackageName());
-		if (0 == soundId) {
-			return result;
+		if (0 != soundId) {
+			soundUri = Uri.parse("android.resource://" + context.getPackageName() + "/" + soundId);
 		}
-		
-		result = Uri.parse("android.resource://" + context.getPackageName() + "/" + soundId);
-		return result;
+		return builder.setSound(soundUri);
 	}
-
+	
 	/**
 	 * Sets custom icons if passed in message
 	 * @param builder
