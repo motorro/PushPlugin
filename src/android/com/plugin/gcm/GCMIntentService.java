@@ -3,6 +3,9 @@ package com.plugin.gcm;
 import java.util.List;
 
 import com.google.android.gcm.GCMBaseIntentService;
+import com.plugin.gcm.icons.IconClient;
+import com.plugin.gcm.icons.IconDownloadTask;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -21,6 +24,7 @@ import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.support.v4.app.NotificationCompat;
+import android.support.v4.app.NotificationCompat.Builder;
 import android.util.Log;
 
 @SuppressLint("NewApi")
@@ -85,16 +89,16 @@ public class GCMIntentService extends GCMBaseIntentService {
 
 	public void createNotification(Context context, Bundle extras)
 	{
-		NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-		String appName = getAppName(this);
+		final NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+		final String appName = getAppName(this);
 
-		Intent notificationIntent = new Intent(this, PushHandlerActivity.class);
+		final Intent notificationIntent = new Intent(this, PushHandlerActivity.class);
 		notificationIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
 		notificationIntent.putExtra("pushBundle", extras);
 
-		PendingIntent contentIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);		
+		final PendingIntent contentIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);		
 
-		NotificationCompat.Builder mBuilder = 
+		final NotificationCompat.Builder mBuilder = 
 			new NotificationCompat.Builder(context)
 				.setPriority(0)
 				.setWhen(System.currentTimeMillis())
@@ -113,15 +117,18 @@ public class GCMIntentService extends GCMBaseIntentService {
 		} 
 		mBuilder.setContentText(message);
 
-		String msgcnt = extras.getString("msgcnt");
+		final String msgcnt = extras.getString("msgcnt");
 		if (null != msgcnt) {
 			mBuilder.setNumber(Integer.parseInt(msgcnt));
 		}
 
-		setIcons(mBuilder, context, extras);
 		setFeedback(mBuilder, context, extras);
-		
-		mNotificationManager.notify((String) appName, NOTIFICATION_ID, mBuilder.build());
+		setIcons(mBuilder, context, extras, new IIconBuilderClient() {
+			@Override
+			public void onIconsSet(Builder builder) {
+				mNotificationManager.notify((String) appName, NOTIFICATION_ID, builder.build());
+			}
+		});
 	}
 	
 	/**
@@ -134,7 +141,7 @@ public class GCMIntentService extends GCMBaseIntentService {
 	 * @param extras
 	 * @return
 	 */
-	private NotificationCompat.Builder setFeedback(NotificationCompat.Builder builder, Context context, Bundle extras) {
+	private NotificationCompat.Builder setFeedback(final NotificationCompat.Builder builder, final Context context, final Bundle extras) {
 		// Check both sound properties
 		// If sound is not set - do not vibrate and flash also
 		String soundName = extras.getString("sound");
@@ -160,8 +167,8 @@ public class GCMIntentService extends GCMBaseIntentService {
 		// USe default sound as a fallback
 		Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
 		
-		Resources res = context.getResources();
-		int soundId = res.getIdentifier(soundName, "raw", context.getPackageName());
+		final Resources res = context.getResources();
+		final int soundId = res.getIdentifier(soundName, "raw", context.getPackageName());
 		if (0 != soundId) {
 			soundUri = Uri.parse("android.resource://" + context.getPackageName() + "/" + soundId);
 		}
@@ -175,15 +182,20 @@ public class GCMIntentService extends GCMBaseIntentService {
 	 * @param extras
 	 * @return
 	 */
-	private NotificationCompat.Builder setIcons(NotificationCompat.Builder builder, Context context, Bundle extras) {
-		Resources res = context.getResources();
+	private void setIcons(final NotificationCompat.Builder builder, final Context context, final Bundle extras, final IIconBuilderClient client) {
+		final Resources res = context.getResources();
 		int smallIcon = context.getApplicationInfo().icon;
+		
+		final int largeHeight = (int) res.getDimension(android.R.dimen.notification_large_icon_height);
+		final int largeWidth  = (int) res.getDimension(android.R.dimen.notification_large_icon_width);
+		
 		Bitmap largeIcon = (((BitmapDrawable)res.getDrawable(smallIcon)).getBitmap());
 		
-		String iconName = extras.getString("icon");
+		// Get small icon and hardcoded large substitute
+		final String iconName = extras.getString("icon");
 		if (null != iconName && false == iconName.equals("")) {
-			int smallIconId = res.getIdentifier(iconName, "drawable", context.getPackageName());
-			int largeIconId = res.getIdentifier(iconName + "_large", "drawable", context.getPackageName());
+			final int smallIconId = res.getIdentifier(iconName, "drawable", context.getPackageName());
+			final int largeIconId = res.getIdentifier(iconName + "_large", "drawable", context.getPackageName());
 			
 			if (0 != smallIconId) {
 				smallIcon = smallIconId;
@@ -194,7 +206,30 @@ public class GCMIntentService extends GCMBaseIntentService {
 			}
 		}
 		
-		return builder.setSmallIcon(smallIcon).setLargeIcon(largeIcon);
+		// Set small icon right away
+		builder.setSmallIcon(smallIcon);
+		
+		// Get large icon URL if provided
+		final String largeIconUrl = extras.getString("largeIconUrl");
+		if (null == largeIconUrl || largeIconUrl.equals("")) {
+			// No icon URL set - return evaluated icons
+			builder.setLargeIcon(Bitmap.createScaledBitmap(largeIcon, largeWidth, largeHeight, true));
+			client.onIconsSet(builder);
+			return;
+		}
+		
+		// Try to download large icon
+		IconDownloadTask task = new IconDownloadTask(new IconClient(largeIcon) {
+			public void haveIcon(Bitmap bitmap) {
+				Bitmap icon = defaultIcon;
+				if (null != bitmap) {
+					icon = bitmap;
+				}
+				builder.setLargeIcon(Bitmap.createScaledBitmap(icon, largeWidth, largeHeight, true));
+				client.onIconsSet(builder);
+			}
+		});
+		task.execute(largeIconUrl);
 	}
 
 	public static void cancelNotification(Context context)
