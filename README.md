@@ -8,6 +8,9 @@ This plugin is for use with [Cordova](http://cordova.apache.org/), and allows yo
 
 **Important** - Push notifications are intended for real devices. They are not tested for WP8 Emulator. The registration process will fail on the iOS simulator. Notifications can be made to work on the Android Emulator, however doing so requires installation of some helper libraries, as outlined [here,](http://www.androidhive.info/2012/10/android-push-notifications-using-google-cloud-messaging-gcm-php-and-mysql/) under the section titled "Installing helper libraries and setting up the Emulator".
 
+> Note about a fork... This fork is to extend the Android part with customized icons, ticker message and sound. As soon as [the pull request](https://github.com/phonegap-build/PushPlugin/pull/20) was rejected - it resides here :)
+
+
 ### Contents
 
 - [LICENSE](#license)
@@ -16,6 +19,7 @@ This plugin is for use with [Cordova](http://cordova.apache.org/), and allows yo
 - [Plugin API](#plugin_api)
 - [Testing](#testing)
 - [Additional Resources](#additional_resources)
+- [Extended Android Messages](#extended_android)
 - [Acknowledgments](#acknowledgments)
 
 
@@ -729,6 +733,78 @@ If you're not up to building and maintaining your own intermediary push server, 
 - [Google Cloud Messaging for Android](http://developer.android.com/guide/google/gcm/index.html) (Android)
 - [How to Implement Push Notifications for Android](http://tokudu.com/2010/how-to-implement-push-notifications-for-android/)
 - [Local and Push Notification Programming Guide](http://developer.apple.com/library/mac/#documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/ApplePushService/ApplePushService.html) (Apple)
+
+
+##<a name="extended_android"></a>Extended Android Messages
+
+The purpose of this fork is a support for extended Android message UI capabilities:
+* Custom ticker message
+* Custom small and large icons
+* Downloadable large icons
+* Custom notification sound
+
+You can set them serverside like this (using [node-gcm](https://github.com/ToothlessGear/node-gcm)):
+
+```javascript
+
+var payload = {
+    message:"A message",
+    msgcnt: 1,
+    ticker: "A custom ticker (text being scrolled in notification area)",
+    // 'sound' or 'soundname' parameters define a local sound resource 
+    // 'default' as a value of 'sound' or 'soundname' makes default notification sound
+    // If either of parameters are not found - notification is silent (icon only)    
+    // notification.mp3 should be put to res.raw
+    // If ommited the default notification sound plays
+    sound: "notification", 
+    // put notification.png to your res.drawable to use custom small icon
+    // put notification_large.png to set large icon (separate config for it not implemented)
+    icon: "notification",
+    // If set - downloads large icon and uses it. Otherwize uses the 'icon' rules above
+    largeIconUrl: "http://www.images.com/a_custom_large_icon.png"
+    //Thus the large icon is set in following priority:
+    // - largeIconUrl if it is set and a valid picture downloads
+    // - The value of icon field + "_large" if found in res ("notification_large.png" in the example)
+    // - The application icon if the above fails
+};
+
+sendGCM(deviceId, payload, function(){});
+
+function sendGCM(device, payload, result) {
+    var sender = new gcm.Sender("---GCM Token---");
+    var registrationIds = [device];
+
+    var message = new gcm.Message({
+        collapseKey: 'collapseId'
+    });
+
+    message.addDataWithKeyValue('message',payload.message || "No message for you...");
+
+    if (payload.msgcnt) {
+        message.addDataWithKeyValue('msgcnt',payload.msgcnt);
+    }
+
+    // Ticker message. App name is used if not passed
+    if (payload.ticker) {
+        message.addDataWithKeyValue('ticker',payload.ticker);
+    }
+
+    // Custom ringtone name. Ringtone should be put to res.raw. File extention should be ommited
+    if (payload.sound) {
+        message.addDataWithKeyValue('soundname',payload.sound);
+    }
+
+    // Custom icon name to set as small icon. Otherwise - app icon used
+    // If iconName_large is also found in res.drawable that icon is set as large one. Otherwise - app icon used
+    if (payload.icon) {
+        message.addDataWithKeyValue('icon',payload.icon);
+    }
+
+    sender.send(message, registrationIds, 4, result);
+}
+```
+
+All the new params are also being passed to JavaScript part when the app is in foreground.
 
 
 ##<a name="acknowledgments"><a/> Acknowledgments
