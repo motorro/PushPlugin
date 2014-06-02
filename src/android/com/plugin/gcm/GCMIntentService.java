@@ -1,17 +1,9 @@
 package com.plugin.gcm;
 
-import java.util.List;
-
-import com.google.android.gcm.GCMBaseIntentService;
-import com.plugin.gcm.icons.IconClient;
-import com.plugin.gcm.icons.IconDownloadTask;
-
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import android.annotation.SuppressLint;
-import android.app.ActivityManager;
-import android.app.ActivityManager.RunningTaskInfo;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -26,6 +18,10 @@ import android.os.Bundle;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.NotificationCompat.Builder;
 import android.util.Log;
+
+import com.google.android.gcm.GCMBaseIntentService;
+import com.plugin.gcm.icons.IconClient;
+import com.plugin.gcm.icons.IconDownloadTask;
 
 @SuppressLint("NewApi")
 public class GCMIntentService extends GCMBaseIntentService {
