@@ -104,7 +104,7 @@ public class GCMIntentService extends GCMBaseIntentService {
 				defaults = Integer.parseInt(extras.getString("defaults"));
 			} catch (NumberFormatException e) {}
 		}
-		
+
 		NotificationCompat.Builder mBuilder =
 			new NotificationCompat.Builder(context)
 				.setDefaults(defaults)
@@ -115,7 +115,7 @@ public class GCMIntentService extends GCMBaseIntentService {
 		String title = extras.getString("title");
 		if (null == title || title.equals("")) {
 			title = appName;
-		} 
+		}
 		mBuilder.setContentTitle(title);
 
 		String ticker = extras.getString("ticker");
@@ -136,7 +136,7 @@ public class GCMIntentService extends GCMBaseIntentService {
 		}
 
 		int notId = 0;
-		
+
 		try {
 			notId = Integer.parseInt(extras.getString("notId"));
 		}
@@ -146,10 +146,10 @@ public class GCMIntentService extends GCMBaseIntentService {
 		catch(Exception e) {
 			Log.e(TAG, "Number format exception - Error parsing Notification ID" + e.getMessage());
 		}
-		
+
 		// Set feedback (sound, lights etc)
 		setFeedback(mBuilder, context, extras);
-		
+
 		// Asynchronous icon load watcher
 		class IconBuilderClient implements IIconBuilderClient {
 			private final String tag;
@@ -158,13 +158,13 @@ public class GCMIntentService extends GCMBaseIntentService {
 				this.tag = tag;
 				this.notificationId = notificationId;
 			}
-			
+
 			@Override
 			public void onIconsSet(Builder builder) {
 				mNotificationManager.notify(this.tag, this.notificationId, builder.build());
 			}
 		}
-		
+
 		setIcons(mBuilder, context, extras, new IconBuilderClient((String) appName, notId));
 	}
 	
