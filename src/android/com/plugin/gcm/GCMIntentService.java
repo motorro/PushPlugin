@@ -1,5 +1,8 @@
 package com.plugin.gcm;
 
+import com.plugin.gcm.icons.IconClient;
+import com.plugin.gcm.icons.IconDownloadTask;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -20,13 +23,10 @@ import android.support.v4.app.NotificationCompat.Builder;
 import android.util.Log;
 
 import com.google.android.gcm.GCMBaseIntentService;
-import com.plugin.gcm.icons.IconClient;
-import com.plugin.gcm.icons.IconDownloadTask;
 
 @SuppressLint("NewApi")
 public class GCMIntentService extends GCMBaseIntentService {
 
-	public static final int NOTIFICATION_ID = 237;
 	private static final String TAG = "GCMIntentService";
 	
 	public GCMIntentService() {
@@ -77,9 +77,12 @@ public class GCMIntentService extends GCMBaseIntentService {
 			extras.putBoolean("foreground", foreground);
 
 			if (foreground)
+				// if we are in the foreground, just surface the payload, else post it to the statusbar
 				PushPlugin.sendExtras(extras);
-			else
+			else if (null != extras.getString("message") && 0 != extras.getString("message").length()) {
+				// Send a notification if there is a message
 				createNotification(context, extras);
+			}
 		}
 	}
 
@@ -94,16 +97,30 @@ public class GCMIntentService extends GCMBaseIntentService {
 
 		final PendingIntent contentIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);		
 
-		final NotificationCompat.Builder mBuilder = 
+		int defaults = Notification.DEFAULT_ALL;
+
+		if (null != extras.getString("defaults")) {
+			try {
+				defaults = Integer.parseInt(extras.getString("defaults"));
+			} catch (NumberFormatException e) {}
+		}
+
+		NotificationCompat.Builder mBuilder =
 			new NotificationCompat.Builder(context)
-				.setPriority(0)
+				.setDefaults(defaults)
 				.setWhen(System.currentTimeMillis())
-				.setContentTitle(appName)
-				.setContentIntent(contentIntent);
+				.setContentIntent(contentIntent)
+				.setAutoCancel(true);
 		
+		String title = extras.getString("title");
+		if (null == title || title.equals("")) {
+			title = appName;
+		}
+		mBuilder.setContentTitle(title);
+
 		String ticker = extras.getString("ticker");
 		if (null == ticker || ticker.equals("")) {
-			ticker = appName;
+			ticker = title;
 		} 
 		mBuilder.setTicker(ticker);
 
@@ -118,13 +135,37 @@ public class GCMIntentService extends GCMBaseIntentService {
 			mBuilder.setNumber(Integer.parseInt(msgcnt));
 		}
 
+		int notId = 0;
+
+		try {
+			notId = Integer.parseInt(extras.getString("notId"));
+		}
+		catch(NumberFormatException e) {
+			Log.e(TAG, "Number format exception - Error parsing Notification ID: " + e.getMessage());
+		}
+		catch(Exception e) {
+			Log.e(TAG, "Number format exception - Error parsing Notification ID" + e.getMessage());
+		}
+
+		// Set feedback (sound, lights etc)
 		setFeedback(mBuilder, context, extras);
-		setIcons(mBuilder, context, extras, new IIconBuilderClient() {
+
+		// Asynchronous icon load watcher
+		class IconBuilderClient implements IIconBuilderClient {
+			private final String tag;
+			private final int notificationId;
+			public IconBuilderClient(String tag, int notificationId) {
+				this.tag = tag;
+				this.notificationId = notificationId;
+			}
+
 			@Override
 			public void onIconsSet(Builder builder) {
-				mNotificationManager.notify((String) appName, NOTIFICATION_ID, builder.build());
+				mNotificationManager.notify(this.tag, this.notificationId, builder.build());
 			}
-		});
+		}
+
+		setIcons(mBuilder, context, extras, new IconBuilderClient((String) appName, notId));
 	}
 	
 	/**
@@ -226,12 +267,6 @@ public class GCMIntentService extends GCMBaseIntentService {
 			}
 		});
 		task.execute(largeIconUrl);
-	}
-
-	public static void cancelNotification(Context context)
-	{
-		NotificationManager mNotificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-		mNotificationManager.cancel((String)getAppName(context), NOTIFICATION_ID);	
 	}
 	
 	private static String getAppName(Context context)
