@@ -1,5 +1,4 @@
 // Copyright (c) Microsoft Open Technologies, Inc.  Licensed under the MIT license. 
-
 module.exports = {
     register: function (success, fail, args) {
         try {
@@ -15,4 +14,4 @@ module.exports = {
         }
     }
 };
-require("cordova/windows8/commandProxy").add("PushPlugin", module.exports);
+require("cordova/exec/proxy").add("PushPlugin", module.exports);
